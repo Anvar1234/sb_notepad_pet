@@ -1,9 +1,6 @@
 package ru.yandex.kingartaved.sb_notepad.controller;
 
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 import ru.yandex.kingartaved.sb_notepad.data.model.Note;
 import ru.yandex.kingartaved.sb_notepad.service.NoteService;
 
@@ -27,6 +24,11 @@ public class NoteControllerImpl implements NoteController {
     @GetMapping
     public List<Note> getAllNotes() {
        return noteService.getAllNotes();
+    }
+
+    @PostMapping
+    public Note createNote(@RequestBody Note noteToCreate) {
+       return noteService.createNote(noteToCreate);
     }
 
     @Override
