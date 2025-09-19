@@ -1,18 +1,13 @@
 package ru.yandex.kingartaved.sb_notepad.service;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import ru.yandex.kingartaved.sb_notepad.data.constant.NotePriorityEnum;
-import ru.yandex.kingartaved.sb_notepad.data.constant.NoteTypeEnum;
-import ru.yandex.kingartaved.sb_notepad.data.model.ChecklistContent;
-import ru.yandex.kingartaved.sb_notepad.data.model.ChecklistTask;
-import ru.yandex.kingartaved.sb_notepad.data.model.Note;
-import ru.yandex.kingartaved.sb_notepad.data.model.TextContent;
+import ru.yandex.kingartaved.sb_notepad.data.model.*;
 
 import java.time.LocalDateTime;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.NoSuchElementException;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicLong;
 
 @Service
@@ -20,44 +15,12 @@ public class NoteServiceImpl implements NoteService {
 
     private final Map<Long, Note> noteMap;
     private AtomicLong idCounter; //todo: в итоге final или нет?
+    Logger logger = LoggerFactory.getLogger(NoteServiceImpl.class);
 
     public NoteServiceImpl() {
         noteMap = new HashMap<>();
         idCounter = new AtomicLong();
     }
-
-    //            Map.of(
-//            1L, Note.builder()
-//                    .id(1L)
-//                    .title("Note1 title")
-//                    .createdAt(LocalDateTime.of(2024, 5, 24, 0, 0))
-//                    .updatedAt(LocalDateTime.of(2025, 6, 25, 1, 1))
-//                    .pinned(false)
-//                    .type(NoteTypeEnum.TEXT_NOTE)
-//                    .content(new TextContent("Text1 note body"))
-//                    .build(),
-//            2L, Note.builder()
-//                    .id(2L)
-//                    .title("Checklist2 title")
-//                    .createdAt(LocalDateTime.now())
-//                    .updatedAt(LocalDateTime.now())
-//                    .pinned(false)
-//                    .type(NoteTypeEnum.CHECKLIST)
-//                    .content(new ChecklistContent(
-//                            List.of(new ChecklistTask("Task1", false),
-//                                    new ChecklistTask("Task2", true))))
-//                    .build(),
-//            3L, Note.builder()
-//                    .id(3L)
-//                    .title("Название3")
-//                    .createdAt(LocalDateTime.now())
-//                    .updatedAt(LocalDateTime.now().plusDays(7))
-//                    .pinned(false)
-//                    .type(NoteTypeEnum.TEXT_NOTE)
-//                    .content(new TextContent("TextNote3 new content"))
-//                    .build()
-//    );
-
 
     @Override
     public Note getNoteById(Long id) {
@@ -76,16 +39,16 @@ public class NoteServiceImpl implements NoteService {
         if (noteToCreate.getId() != null) {
             throw new IllegalArgumentException("Входящее id должно быть null");
         }
-        if(noteToCreate.getPriority() != null) {
+        if (noteToCreate.getPriority() != null) {
             throw new IllegalArgumentException("Входящий приоритет должен быть null");
         }
 
         var createdNote = Note.builder()
                 .id(idCounter.incrementAndGet()) //задаем только здесь
                 .title(noteToCreate.getTitle())
-                .createdAt(noteToCreate.getCreatedAt())
-                .updatedAt(noteToCreate.getUpdatedAt())
-                .pinned(noteToCreate.isPinned())
+                .createdAt(LocalDateTime.now())
+                .updatedAt(LocalDateTime.now())
+                .pinned(false)
                 .type(noteToCreate.getType())
                 .priority(NotePriorityEnum.BASE) //задаем только здесь
                 .content(noteToCreate.getContent())
@@ -95,4 +58,173 @@ public class NoteServiceImpl implements NoteService {
         return createdNote;
     }
 
+    @Override
+    public List<Note> createNotes(List<Note> notesToCreate) {
+        if (notesToCreate != null) {
+            notesToCreate.forEach(this::createNote);
+            return noteMap.values().stream().toList();
+        }
+        return List.of();
+    }
+
+    @Override
+    public Note updateNote(Long id, Note noteToUpdate) {
+        validateNoteExists(id);
+        ensureNoteTypeMatchesContentType(id, noteToUpdate.getContent());
+
+        var existingNote = noteMap.get(id);
+
+        if (existingNote.getType() != noteToUpdate.getType()) {
+            logger.warn("Попытка изменения типа заметки с id = {} с типа {} на тип {}",
+                    id,
+                    existingNote.getType(),
+                    noteToUpdate.getType());
+            throw new IllegalArgumentException("Тип заметки не может быть изменен");
+        }
+
+        Note updatedNote = Note.builder()
+                .id(noteToUpdate.getId())
+                .title(noteToUpdate.getTitle())
+                .createdAt(noteToUpdate.getCreatedAt())
+                .updatedAt(LocalDateTime.now())
+                .pinned(noteToUpdate.isPinned())
+                .type(noteToUpdate.getType())
+                .priority(noteToUpdate.getPriority())
+                .content(noteToUpdate.getContent())
+                .build();
+        noteMap.put(id, updatedNote);
+
+        return updatedNote;
+    }
+
+
+
+    @Override
+    public Note updateNoteTitle(Long id, String titleToUpdate) {
+        validateNoteExists(id);
+        Note existingNote = noteMap.get(id);
+
+        if (titleToUpdate == null) {
+            throw new IllegalArgumentException("Название заметки не может быть null");
+        }
+
+        if (titleToUpdate.isBlank()) {
+            throw new IllegalArgumentException("Название заметки не может быть пустым");
+        }
+
+        Note updatedNote = Note.builder()
+                .id(existingNote.getId())
+                .title(titleToUpdate) //todo
+                .createdAt(existingNote.getCreatedAt())
+                .updatedAt(LocalDateTime.now())
+                .pinned(existingNote.isPinned())
+                .type(existingNote.getType())
+                .priority(existingNote.getPriority())
+                .content(existingNote.getContent())
+                .build();
+
+        noteMap.put(id, updatedNote);
+        return updatedNote;
+    }
+
+    @Override
+    public Note updateNoteContent(Long id, Content contentToUpdate) {
+        validateNoteExists(id);
+        Note existingNote = noteMap.get(id);
+
+        if (contentToUpdate == null) throw new IllegalArgumentException("Содержимое заметки не может быть null");
+        ensureNoteTypeMatchesContentType(id, contentToUpdate);
+
+        Note updatedNote = Note.builder()
+                .id(existingNote.getId())
+                .title(existingNote.getTitle())
+                .createdAt(existingNote.getCreatedAt())
+                .updatedAt(LocalDateTime.now())
+                .pinned(existingNote.isPinned())
+                .type(existingNote.getType())
+                .priority(existingNote.getPriority())
+                .content(contentToUpdate) //todo
+                .build();
+
+        noteMap.put(id, updatedNote);
+        return updatedNote;
+    }
+
+    @Override
+    public Note toggleNotePinned(Long id) {
+        validateNoteExists(id);
+        Note existingNote = noteMap.get(id);
+
+        Note updatedNote = Note.builder()
+                .id(existingNote.getId())
+                .title(existingNote.getTitle())
+                .createdAt(existingNote.getCreatedAt())
+                .updatedAt(LocalDateTime.now())
+                .pinned(!existingNote.isPinned()) //todo
+                .type(existingNote.getType())
+                .priority(existingNote.getPriority())
+                .content(existingNote.getContent())
+                .build();
+
+        noteMap.put(id, updatedNote);
+        return updatedNote;
+    }
+
+    @Override
+    public Note updateNotePriority(Long id, NotePriorityEnum priorityToUpdate) {
+        validateNoteExists(id);
+        Note existingNote = noteMap.get(id);
+
+        if (priorityToUpdate == null) {
+            throw new IllegalArgumentException("Приоритет заметки не может быть null");
+        }
+
+        try {
+            NotePriorityEnum.valueOf(priorityToUpdate.name());
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException(
+                    "Передаваемый приоритет: '" + priorityToUpdate +
+                            "' не соответствует енаму: 'NotePriorityEnum'. Поддерживаемые значения: " +
+                            Arrays.toString(NotePriorityEnum.values()), e);
+        }
+
+        Note updatedNote = Note.builder()
+                .id(existingNote.getId())
+                .title(existingNote.getTitle())
+                .createdAt(existingNote.getCreatedAt())
+                .updatedAt(LocalDateTime.now())
+                .pinned(existingNote.isPinned())
+                .type(existingNote.getType())
+                .priority(priorityToUpdate) //todo
+                .content(existingNote.getContent())
+                .build();
+
+        noteMap.put(id, updatedNote);
+        return updatedNote;
+    }
+
+    @Override
+    public void deleteNote(Long id) {
+        validateNoteExists(id);
+        noteMap.remove(id);
+    }
+
+    private void validateNoteExists(Long id) {
+        if (!noteMap.containsKey(id)) {
+            throw new NoSuchElementException("Заметки с id " + id + " не существует");
+        }
+    }
+
+    private void ensureNoteTypeMatchesContentType(Long id, Content contentToUpdate) {
+
+        Note existingNote = noteMap.get(id);
+
+        if (existingNote.getContent().getSupportedType() != contentToUpdate.getSupportedType()) {
+            logger.warn("Тип заметки с id = {} это = {}, а тип контента, который передан в метод updateNote = {}",
+                    id,
+                    existingNote.getType(),
+                    contentToUpdate.getSupportedType());
+            throw new IllegalArgumentException("Тип заметки и тип передаваемого контента не совпадают");
+        }
+    }
 }
