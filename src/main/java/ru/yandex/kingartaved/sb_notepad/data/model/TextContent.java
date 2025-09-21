@@ -1,9 +1,11 @@
 package ru.yandex.kingartaved.sb_notepad.data.model;
 
 import lombok.Getter;
+import lombok.Setter;
 import lombok.ToString;
 import ru.yandex.kingartaved.sb_notepad.data.constant.NoteTypeEnum;
 
+//@Setter //todo: remove после того как будут ResponseDto
 @Getter
 @ToString
 public final class TextContent extends Content {

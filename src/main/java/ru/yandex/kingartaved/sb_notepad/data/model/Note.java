@@ -9,7 +9,8 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @NoArgsConstructor
 @Getter
-@Builder
+@Setter //todo: сеттер дает устанавливать заголовок, но контент пока не работает, то есть пока нужен
+@Builder(toBuilder = true)
 @ToString
 @EqualsAndHashCode
 public class Note {
