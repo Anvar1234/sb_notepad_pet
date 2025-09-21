@@ -4,7 +4,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import ru.yandex.kingartaved.sb_notepad.data.constant.NotePriorityEnum;
-import ru.yandex.kingartaved.sb_notepad.data.model.*;
+import ru.yandex.kingartaved.sb_notepad.data.mapper.ContentMapper;
+import ru.yandex.kingartaved.sb_notepad.data.mapper.NoteMapper;
+import ru.yandex.kingartaved.sb_notepad.data.model.Content;
+import ru.yandex.kingartaved.sb_notepad.data.model.Note;
+import ru.yandex.kingartaved.sb_notepad.dto.ContentDto;
+import ru.yandex.kingartaved.sb_notepad.dto.request.UpdateNoteRequestDto;
 
 import java.time.LocalDateTime;
 import java.util.*;
@@ -14,12 +19,17 @@ import java.util.concurrent.atomic.AtomicLong;
 public class NoteServiceImpl implements NoteService {
 
     private final Map<Long, Note> noteMap;
-    private AtomicLong idCounter; //todo: в итоге final или нет?
+    private final NoteMapper mapper;
+    private final ContentMapper contentMapper;
+    private final AtomicLong idCounter;
+
     Logger logger = LoggerFactory.getLogger(NoteServiceImpl.class);
 
-    public NoteServiceImpl() {
-        noteMap = new HashMap<>();
-        idCounter = new AtomicLong();
+    public NoteServiceImpl(NoteMapper mapper, ContentMapper contentMapper) {
+        this.noteMap = new HashMap<>();
+        this.mapper = mapper;
+        this.contentMapper = contentMapper;
+        this.idCounter = new AtomicLong();
     }
 
     @Override
@@ -68,36 +78,41 @@ public class NoteServiceImpl implements NoteService {
     }
 
     @Override
-    public Note updateNote(Long id, Note noteToUpdate) {
+    public Note updateNote(Long id, UpdateNoteRequestDto requestDto) {
         validateNoteExists(id);
-        ensureNoteTypeMatchesContentType(id, noteToUpdate.getContent());
-
         var existingNote = noteMap.get(id);
+        ensureNoteTypeMatchesContentType(id, requestDto.contentDto());
 
-        if (existingNote.getType() != noteToUpdate.getType()) {
-            logger.warn("Попытка изменения типа заметки с id = {} с типа {} на тип {}",
-                    id,
-                    existingNote.getType(),
-                    noteToUpdate.getType());
-            throw new IllegalArgumentException("Тип заметки не может быть изменен");
-        }
+        Note updatedNote = mapper.updateNoteFromDto(requestDto, existingNote); //маппинг не создает новый объект, а дополняет существующий
+        updatedNote.setUpdatedAt(LocalDateTime.now());
 
-        Note updatedNote = Note.builder()
-                .id(noteToUpdate.getId())
-                .title(noteToUpdate.getTitle())
-                .createdAt(noteToUpdate.getCreatedAt())
-                .updatedAt(LocalDateTime.now())
-                .pinned(noteToUpdate.isPinned())
-                .type(noteToUpdate.getType())
-                .priority(noteToUpdate.getPriority())
-                .content(noteToUpdate.getContent())
-                .build();
         noteMap.put(id, updatedNote);
-
         return updatedNote;
     }
 
+    @Override
+    public Note updateNoteContent(Long id, ContentDto contentDto) {
+        validateNoteExists(id);
+        Note existingNote = noteMap.get(id);
 
+        if (contentDto == null) throw new IllegalArgumentException("Содержимое заметки не может быть null");
+        ensureNoteTypeMatchesContentType(id, contentDto);
+        Content updatedContent = contentMapper.toEntity(contentDto);
+
+        Note updatedNote = Note.builder()
+                .id(existingNote.getId())
+                .title(existingNote.getTitle())
+                .createdAt(existingNote.getCreatedAt())
+                .updatedAt(LocalDateTime.now())
+                .pinned(existingNote.isPinned())
+                .type(existingNote.getType())
+                .priority(existingNote.getPriority())
+                .content(updatedContent) //todo
+                .build();
+
+        noteMap.put(id, updatedNote);
+        return updatedNote;
+    }
 
     @Override
     public Note updateNoteTitle(Long id, String titleToUpdate) {
@@ -121,29 +136,6 @@ public class NoteServiceImpl implements NoteService {
                 .type(existingNote.getType())
                 .priority(existingNote.getPriority())
                 .content(existingNote.getContent())
-                .build();
-
-        noteMap.put(id, updatedNote);
-        return updatedNote;
-    }
-
-    @Override
-    public Note updateNoteContent(Long id, Content contentToUpdate) {
-        validateNoteExists(id);
-        Note existingNote = noteMap.get(id);
-
-        if (contentToUpdate == null) throw new IllegalArgumentException("Содержимое заметки не может быть null");
-        ensureNoteTypeMatchesContentType(id, contentToUpdate);
-
-        Note updatedNote = Note.builder()
-                .id(existingNote.getId())
-                .title(existingNote.getTitle())
-                .createdAt(existingNote.getCreatedAt())
-                .updatedAt(LocalDateTime.now())
-                .pinned(existingNote.isPinned())
-                .type(existingNote.getType())
-                .priority(existingNote.getPriority())
-                .content(contentToUpdate) //todo
                 .build();
 
         noteMap.put(id, updatedNote);
@@ -215,15 +207,15 @@ public class NoteServiceImpl implements NoteService {
         }
     }
 
-    private void ensureNoteTypeMatchesContentType(Long id, Content contentToUpdate) {
+    private void ensureNoteTypeMatchesContentType(Long id, ContentDto contentDto) {
 
         Note existingNote = noteMap.get(id);
 
-        if (existingNote.getContent().getSupportedType() != contentToUpdate.getSupportedType()) {
+        if (existingNote.getContent().getSupportedType() != contentDto.getSupportedType()) {
             logger.warn("Тип заметки с id = {} это = {}, а тип контента, который передан в метод updateNote = {}",
                     id,
                     existingNote.getType(),
-                    contentToUpdate.getSupportedType());
+                    contentDto.getSupportedType());
             throw new IllegalArgumentException("Тип заметки и тип передаваемого контента не совпадают");
         }
     }

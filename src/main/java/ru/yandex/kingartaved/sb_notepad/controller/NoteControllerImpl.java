@@ -5,10 +5,10 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import ru.yandex.kingartaved.sb_notepad.data.constant.NotePriorityEnum;
-import ru.yandex.kingartaved.sb_notepad.data.model.Content;
 import ru.yandex.kingartaved.sb_notepad.data.model.Note;
-import ru.yandex.kingartaved.sb_notepad.dto.request.UpdateNotePriorityRequestDto;
+import ru.yandex.kingartaved.sb_notepad.dto.ContentDto;
+import ru.yandex.kingartaved.sb_notepad.dto.request.UpdateNoteRequestDto;
+import ru.yandex.kingartaved.sb_notepad.dto.request.UpdatePriorityRequestDto;
 import ru.yandex.kingartaved.sb_notepad.dto.request.UpdateTitleRequestDto;
 import ru.yandex.kingartaved.sb_notepad.service.NoteService;
 
@@ -43,7 +43,9 @@ public class NoteControllerImpl implements NoteController {
     }
 
     @PostMapping
-    public ResponseEntity<Note> createNote(@RequestBody Note noteToCreate) {
+    public ResponseEntity<Note> createNote(
+            @RequestBody Note noteToCreate
+    ) {
         return ResponseEntity.status(HttpStatus.CREATED) //это код 201
                 .body(noteService.createNote(noteToCreate));
     }
@@ -59,8 +61,9 @@ public class NoteControllerImpl implements NoteController {
     @PutMapping({"/{id}"})
     public ResponseEntity<Note> updateNote(
             @PathVariable("id") Long id,
-            @RequestBody Note noteToUpdate) {
-        var updated = noteService.updateNote(id, noteToUpdate);
+            @RequestBody UpdateNoteRequestDto updateNoteRequestDto
+    ) {
+        var updated = noteService.updateNote(id, updateNoteRequestDto);
 
         return ResponseEntity.ok(updated);
     }
@@ -73,6 +76,7 @@ public class NoteControllerImpl implements NoteController {
         logger.info("Попытка изменения заголовка заметки с id = {}", id);
         try {
             var updated = noteService.updateNoteTitle(id, titleRequestDto.title());
+            logger.info("Заметка с id = {}, изменен заголовок", id);
             return ResponseEntity.status(HttpStatus.OK)
                     .body(updated);
         } catch (IllegalArgumentException e) {
@@ -87,11 +91,12 @@ public class NoteControllerImpl implements NoteController {
     @PatchMapping({"/{id}/content"})
     public ResponseEntity<Note> updateNoteContent(
             @PathVariable("id") Long id,
-            @RequestBody Content contentToUpdate
+            @RequestBody ContentDto contentDto
     ) {
         logger.info("Попытка изменения контента заметки с id = {}", id);
         try {
-            var updated = noteService.updateNoteContent(id, contentToUpdate);
+            var updated = noteService.updateNoteContent(id, contentDto);
+            logger.info("Заметка с id = {}, изменен контент", id);
             return ResponseEntity.status(200)
                     .body(updated);
         } catch (IllegalArgumentException e) {
@@ -110,6 +115,7 @@ public class NoteControllerImpl implements NoteController {
         logger.info("Попытка изменения закрепа заметки с id = {}", id);
         try {
             var updated = noteService.toggleNotePinned(id);
+            logger.info("Заметка с id = {}, изменено закрепление на: {}", id, updated.isPinned());
             return ResponseEntity.status(200)
                     .body(updated);
         } catch (IllegalArgumentException e) {
@@ -124,11 +130,12 @@ public class NoteControllerImpl implements NoteController {
     @PatchMapping({"/{id}/priority"})
     public ResponseEntity<Note> updateNotePriority(
             @PathVariable("id") Long id,
-            @RequestBody UpdateNotePriorityRequestDto priorityRequestDto
+            @RequestBody UpdatePriorityRequestDto priorityRequestDto
             ) {
         logger.info("Попытка изменения приоритета заметки с id = {}", id);
         try {
             var updated = noteService.updateNotePriority(id, priorityRequestDto.priorityEnumToUpdate());
+            logger.info("Заметка с id = {}, изменен приоритет", id);
             return ResponseEntity.status(200)
                     .body(updated);
         } catch (IllegalArgumentException e) {
@@ -145,6 +152,7 @@ public class NoteControllerImpl implements NoteController {
         logger.info("Попытка удаления заметки с id = {}", id);
         try {
             noteService.deleteNote(id);
+            logger.info("Заметка с id = {} удалена", id);
             return ResponseEntity.ok().build();
         } catch (NoSuchElementException e) {
             return ResponseEntity.status(404)
